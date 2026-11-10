@@ -1,6 +1,6 @@
 # Tonix-Lab-LIVE
 
-A lightweight live-streaming studio for Windows, laid out like a broadcast control room: Program and Preview monitors, a multiview wall of your scenes, a switcher desk with CUT and TAKE, an audio desk, and one-button Go Live.
+A lightweight OBS-style live-streaming studio for Windows: the familiar canvas with Scenes, Sources, Audio Mixer, Scene Transitions and Controls docks, built to stay light on your CPU and graphics card.
 
 ## Install
 
@@ -10,12 +10,13 @@ A lightweight live-streaming studio for Windows, laid out like a broadcast contr
 
 The first launch builds a starter show: Starting Soon, Gameplay, Screen, Camera and Be Right Back.
 
-## Using the control room
+## Using the studio
 
-- **Preview a scene:** click its tile in the multiview, its PVW button, or press keys **1–9**.
-- **Put it on air:** press **TAKE** (uses the selected transition) or **CUT** (instant). Enter = TAKE, C = CUT.
-- **Build a scene:** whatever is in Preview is the "Next shot". Use **+ Add source** for game capture, camera or HDMI capture card, screen, window, mic, image, text or a color background. **Fit** scales a source to fill the screen.
-- **Go live:** click **Edit** in Output, pick the platform, paste your stream key, then **Go live**.
+- **Scenes dock:** click a scene to switch to it, + to add, − to remove, double-click to rename.
+- **Sources dock:** + adds a source (Browser/HTML overlay, Image, Text, Color, Game Capture, Display Capture, Window Capture, Video Capture Device for webcams and HDMI capture cards, Media, audio). The eye shows/hides, the lock stops it moving, ▲▼ change the layer order, double-click opens Properties.
+- **Canvas:** click a source to select it, drag to move, pull the red handles to resize (Shift = free resize, Alt = no snapping). Arrow keys nudge, Delete removes. Right-click for Fit/Stretch/Center/Reset transform and layer order.
+- **Studio Mode:** edit the Preview while Program stays live, then press Transition or Cut.
+- **Start Streaming:** set your service and stream key in Settings › Stream first.
 
 ## Light on your PC
 
@@ -33,7 +34,7 @@ GitHub Actions builds the installer on every push to `main` and publishes it to 
 ## Roadmap
 
 1. ✅ Core studio — capture, hardware encoding, go live to one platform
-2. Custom scenes — move/resize sources, overlays, lower thirds
+2. ✅ OBS-style editor — move/resize sources, Browser/HTML and image overlays
 3. Phones — studio account, phones as cameras, phone remote
 4. Multistream — sign in to YouTube/Facebook/Twitch, one Go Live to all
 

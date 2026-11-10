@@ -2,117 +2,102 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src ws://127.0.0.1:*">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ws://127.0.0.1:*">
 <title>Tonix-Lab-LIVE</title>
-<link rel="stylesheet" href="../../node_modules/@fontsource/barlow/400.css">
-<link rel="stylesheet" href="../../node_modules/@fontsource/barlow/600.css">
-<link rel="stylesheet" href="../../node_modules/@fontsource/barlow-condensed/600.css">
-<link rel="stylesheet" href="../../node_modules/@fontsource/barlow-condensed/700.css">
-<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css">
-<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/600.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app">
 
-<header class="topbar">
-  <div class="brand"><span class="brand-name">TONIX LAB LIVE</span><span class="brand-sub">CONTROL ROOM</span></div>
-  <div id="airPill" class="air off">OFF AIR</div>
-  <div class="spacer"></div>
-  <div class="chips">
-    <span class="chip"><span class="k">CPU</span> <span id="statCpu">–</span></span>
-    <span class="chip"><span class="k">FPS</span> <span id="statFps">–</span></span>
-    <span class="chip" id="chipLag" title="Frames the PC could not draw in time"><span class="k">LAG</span> <span id="statLag">0</span></span>
-    <span class="chip" id="chipDrop" title="Frames dropped by the encoder or network"><span class="k">DROPPED</span> <span id="statDrop">0</span></span>
-    <span class="chip" id="chipRate"><span class="k">KBPS</span> <span id="statRate">–</span></span>
-    <span class="chip"><span class="k">ENC</span> <span id="statEnc">–</span></span>
-    <button id="perfBtn" class="chip chip-btn" type="button" aria-pressed="false">PERFORMANCE MODE</button>
-  </div>
-  <button id="settingsBtn" class="btn ghost" type="button">Settings</button>
-  <button id="liveBtn" class="btn go" type="button">Go live</button>
-</header>
+  <div id="healthBar" class="health hidden" role="status"></div>
 
-<div id="healthBar" class="health hidden" role="status"></div>
-
-<main class="main">
-  <section class="left">
-    <div class="monitors">
-      <div class="monitor pgm">
-        <div class="mon-label"><span>PROGRAM</span><span id="pgmName" class="mono">–</span></div>
-        <div class="mon-screen"><img id="pgmImg" alt="Program output"></div>
-      </div>
-      <div class="monitor pvw">
-        <div class="mon-label"><span>PREVIEW</span><span id="pvwName" class="mono">–</span></div>
-        <div class="mon-screen"><img id="pvwImg" alt="Preview output"></div>
-      </div>
-    </div>
-
-    <div class="block">
-      <div class="block-head">
-        <h2>MULTIVIEW · YOUR SCENES</h2>
-        <button id="newSceneBtn" class="btn small" type="button">+ New scene</button>
-      </div>
-      <div id="multiview" class="multiview"></div>
-    </div>
-
-    <div class="desk">
-      <div class="desk-rows">
-        <div class="row"><span class="row-label pgm-t">PGM</span><div id="pgmRow" class="row-btns"></div></div>
-        <div class="row"><span class="row-label pvw-t">PVW</span><div id="pvwRow" class="row-btns"></div></div>
-        <div class="row"><span class="row-label">FX</span><div id="fxRow" class="row-btns"></div>
-          <label class="dur"><span class="sr">Transition length</span>
-            <select id="durSel">
-              <option value="300">0.3 s</option>
-              <option value="500">0.5 s</option>
-              <option value="800">0.8 s</option>
-              <option value="1200">1.2 s</option>
-            </select>
-          </label>
+  <section class="stage" id="stage">
+    <div class="view" id="previewView">
+      <div class="view-label" id="previewLabel">Preview</div>
+      <div class="canvas-box" id="editBox">
+        <div class="canvas" id="editCanvas">
+          <img id="editImg" alt="Scene being edited">
+          <div class="sel-layer" id="selLayer"></div>
         </div>
       </div>
-      <div class="desk-take">
-        <button id="cutBtn" class="big cut" type="button">CUT</button>
-        <button id="takeBtn" class="big take" type="button">TAKE</button>
+    </div>
+    <div class="transition-col hidden" id="transCol">
+      <button id="takeBtn" class="btn take" type="button">Transition</button>
+      <button id="cutBtn" class="btn" type="button">Cut</button>
+    </div>
+    <div class="view hidden" id="programView">
+      <div class="view-label pgm">Program</div>
+      <div class="canvas-box">
+        <div class="canvas" id="pgmCanvas"><img id="pgmImg" alt="Program output"></div>
       </div>
     </div>
   </section>
 
-  <aside class="right">
-    <div class="panel">
-      <div class="block-head"><h2>OUTPUT</h2><span id="outNote" class="mono muted small-t">ONE PLATFORM</span></div>
-      <div class="dest">
-        <span id="destLed" class="led"></span>
-        <div class="dest-text"><span id="destName" class="dest-name">Not set up</span><span id="destDetail" class="muted small-t">Add your stream key to go live</span></div>
-        <span id="destStatus" class="mono small-t">OFF</span>
-        <button id="destEdit" class="btn small" type="button">Edit</button>
+  <section class="docks">
+    <div class="dock">
+      <div class="dock-title">Scenes</div>
+      <ul class="list" id="sceneList" role="listbox" aria-label="Scenes"></ul>
+      <div class="dock-tools">
+        <button class="tool" id="sceneAdd" type="button" title="Add scene" aria-label="Add scene">+</button>
+        <button class="tool" id="sceneRemove" type="button" title="Remove scene" aria-label="Remove scene">−</button>
+        <button class="tool wide" id="sceneRename" type="button">Rename</button>
       </div>
-      <p class="muted small-t note">Streaming to several platforms at once arrives in the multistream update.</p>
     </div>
 
-    <div class="panel">
-      <div class="block-head"><h2>AUDIO DESK</h2></div>
-      <div id="audioDesk" class="audio"><p class="muted small-t">Waiting for audio…</p></div>
+    <div class="dock">
+      <div class="dock-title">Sources</div>
+      <ul class="list" id="sourceList" role="listbox" aria-label="Sources"></ul>
+      <div class="dock-tools">
+        <button class="tool" id="srcAdd" type="button" title="Add source" aria-label="Add source">+</button>
+        <button class="tool" id="srcRemove" type="button" title="Remove source" aria-label="Remove source">−</button>
+        <button class="tool wide" id="srcProps" type="button">Properties</button>
+        <button class="tool" id="srcUp" type="button" title="Move up" aria-label="Move up">▲</button>
+        <button class="tool" id="srcDown" type="button" title="Move down" aria-label="Move down">▼</button>
+      </div>
     </div>
 
-    <div class="panel">
-      <div class="block-head">
-        <h2>NEXT SHOT · <span id="shotScene">–</span></h2>
-        <div class="head-btns">
-          <button id="renameSceneBtn" class="btn small" type="button">Rename</button>
-          <button id="deleteSceneBtn" class="btn small danger" type="button">Delete</button>
-        </div>
-      </div>
-      <div id="shotItems" class="items"></div>
-      <button id="addSourceBtn" class="btn dashed" type="button">+ Add source</button>
-      <p class="muted small-t note">Phones as cameras and the phone remote come in Stage 3.</p>
+    <div class="dock mixer-dock">
+      <div class="dock-title">Audio Mixer</div>
+      <div class="mixer" id="mixer"><p class="muted pad">Waiting for audio…</p></div>
     </div>
-  </aside>
-</main>
+
+    <div class="dock">
+      <div class="dock-title">Scene Transitions</div>
+      <div class="dock-body">
+        <label class="field"><span>Transition</span><select id="transSel"></select></label>
+        <label class="field"><span>Duration (ms)</span><input id="durInput" type="number" min="50" max="20000" step="50" value="300"></label>
+      </div>
+    </div>
+
+    <div class="dock">
+      <div class="dock-title">Controls</div>
+      <div class="dock-body controls">
+        <button id="liveBtn" class="btn ctrl" type="button">Start Streaming</button>
+        <button id="studioBtn" class="btn ctrl" type="button" aria-pressed="false">Studio Mode</button>
+        <button id="perfBtn" class="btn ctrl" type="button" aria-pressed="false">Performance Mode</button>
+        <button id="settingsBtn" class="btn ctrl" type="button">Settings</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="status">
+    <span id="liveStatus" class="st-live">○ LIVE: 00:00:00</span>
+    <span class="st-item">Stream: <b id="destLabel">not set</b></span>
+    <span class="grow"></span>
+    <span class="st-item" id="stLag" title="Frames the PC could not draw in time">Lag: <b id="statLag">0</b></span>
+    <span class="st-item" id="stDrop">Dropped: <b id="statDrop">0</b></span>
+    <span class="st-item" id="stRate"><b id="statRate">0</b> kb/s</span>
+    <span class="st-item">CPU: <b id="statCpu">–</b></span>
+    <span class="st-item"><b id="statFps">–</b> fps</span>
+    <span class="st-item">Encoder: <b id="statEnc">–</b></span>
+  </footer>
 </div>
+
+<div id="ctxMenu" class="ctx hidden" role="menu"></div>
 
 <div id="overlay" class="overlay">
   <div class="overlay-box">
-    <div class="brand-name">TONIX LAB LIVE</div>
+    <div class="brand">Tonix-Lab-LIVE</div>
     <p id="overlayMsg">Starting the engine…</p>
     <button id="overlayRetry" class="btn hidden" type="button">Try again</button>
   </div>
@@ -121,7 +106,7 @@
 <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="modal-box">
     <h3 id="modalTitle"></h3>
-    <div id="modalBody"></div>
+    <div id="modalBody" class="modal-body"></div>
     <div id="modalActions" class="modal-actions"></div>
   </div>
 </div>
