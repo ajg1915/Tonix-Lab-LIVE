@@ -192,3 +192,4 @@ fieldset.grp legend { padding: 0 6px; color: var(--soft); }
 .hk { cursor: pointer; }
 .hk:focus { border-color: #6f9bff !important; }
 .items { display: flex; flex-direction: column; gap: 6px; }
+.log-box { width: 100%; min-height: 320px; padding: 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-family: Consolas, monospace; font-size: 12px; resize: vertical; }

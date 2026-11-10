@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, globalShortcut 
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
 const { Engine, ENCODERS } = require('./obs-engine');
 
 const ENGINE_PORT = 4466; // not 4455, so a normal OBS install never clashes
@@ -9,14 +10,14 @@ const ENGINE_PORT = 4466; // not 4455, so a normal OBS install never clashes
 let win = null;
 let engine = null;
 let settings = null;
-let detected = { encoder: 'x264', gpu: 'No supported graphics chip found' };
+let detected = { encoder: 'x264', gpu: 'No supported graphics chip found', lowEnd: false, ramGB: 0, cores: 0 };
 let isLive = false;
 let quitting = false;
 
 // Phone (9:16) is the default canvas.
 function defaults() {
   return {
-    general: { confirmStart: true, confirmStop: true, autoRecord: false, snapping: true, safeZones: true, theme: 'dark', perf: false },
+    general: { confirmStart: true, confirmStop: true, autoRecord: false, snapping: true, safeZones: true, theme: 'dark', perf: false, lowEnd: null, lowEndNotice: false },
     video: { baseW: 1080, baseH: 1920, outW: 1080, outH: 1920, fps: 30, filter: 'bicubic' },
     output: { encoder: 'auto', bitrate: 4500, audioBitrate: 160, recPath: app.getPath('videos'), recQuality: 'Stream', recFormat: 'fragmented_mp4' },
     audio: { sampleRate: 48000, channels: 'Stereo' },
@@ -31,6 +32,27 @@ function defaults() {
   };
 }
 const SECTIONS = ['general', 'video', 'output', 'audio', 'advanced', 'access'];
+
+// Settings that keep slower laptops and PCs with built-in graphics smooth.
+const PROFILES = {
+  low: {
+    general: { perf: true },
+    video: { baseW: 720, baseH: 1280, outW: 720, outH: 1280, fps: 30, filter: 'bilinear' },
+    output: { bitrate: 2500 },
+    advanced: { dynamicBitrate: true }
+  },
+  normal: {
+    general: { perf: false },
+    video: { baseW: 1080, baseH: 1920, outW: 1080, outH: 1920, fps: 30, filter: 'bicubic' },
+    output: { bitrate: 4500 },
+    advanced: { dynamicBitrate: false }
+  }
+};
+function applyProfile(on) {
+  const prof = on ? PROFILES.low : PROFILES.normal;
+  for (const [k, v] of Object.entries(prof)) settings[k] = Object.assign({}, settings[k], v);
+  settings.general.lowEnd = !!on;
+}
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 
@@ -79,22 +101,30 @@ function decryptKey() {
   }
 }
 
-// Pick the hardware encoder from the graphics chips Windows reports.
-async function detectEncoder() {
+// Pick the hardware encoder from the graphics chips Windows reports, and
+// decide whether this is a slower PC that needs Low-end mode.
+async function detectHardware() {
+  const ramGB = Math.round(os.totalmem() / 1073741824);
+  const cores = (os.cpus() || []).length;
+  let ids = [];
   try {
     const info = await app.getGPUInfo('basic');
-    const ids = (info.gpuDevice || []).map((d) => d.vendorId);
-    if (ids.includes(0x10de)) return { encoder: 'nvenc', gpu: 'NVIDIA graphics' };
-    if (ids.includes(0x1002)) return { encoder: 'amd', gpu: 'AMD graphics' };
-    if (ids.includes(0x8086)) return { encoder: 'qsv', gpu: 'Intel graphics' };
-  } catch { /* fall through */ }
-  return { encoder: 'x264', gpu: 'No supported graphics chip found' };
+    ids = (info.gpuDevice || []).map((d) => d.vendorId);
+  } catch { ids = []; }
+  const nvidia = ids.includes(0x10de), amd = ids.includes(0x1002), intel = ids.includes(0x8086);
+  let encoder = 'x264', gpu = 'No supported graphics chip found';
+  if (nvidia) { encoder = 'nvenc'; gpu = 'NVIDIA graphics'; }
+  else if (amd) { encoder = 'amd'; gpu = intel ? 'AMD + Intel graphics' : 'AMD graphics'; }
+  else if (intel) { encoder = 'qsv'; gpu = 'Intel built-in graphics'; }
+  const onlyBuiltIn = !nvidia && (!amd || intel) && (intel || amd);
+  const lowEnd = !nvidia && (onlyBuiltIn || ramGB <= 8 || cores <= 4 || encoder === 'x264');
+  return { encoder, gpu, lowEnd, ramGB, cores };
 }
 
 const activeEncoder = () => (settings.output.encoder === 'auto' ? detected.encoder : settings.output.encoder);
 
 function engineOpts() {
-  return { video: settings.video, output: settings.output, audio: settings.audio, advanced: settings.advanced, encoder: activeEncoder() };
+  return { video: settings.video, output: settings.output, audio: settings.audio, advanced: settings.advanced, encoder: activeEncoder(), lowEnd: !!settings.general.lowEnd };
 }
 
 function engineInfo() {
@@ -109,7 +139,8 @@ function engineInfo() {
     detectedEncoder: detected.encoder,
     detectedGpu: detected.gpu,
     encoders: ENCODERS,
-    videoLabel: `${settings.video.outW}x${settings.video.outH} · ${settings.video.fps} fps`
+    videoLabel: `${settings.video.outW}x${settings.video.outH} · ${settings.video.fps} fps`,
+    hw: { gpu: detected.gpu, ramGB: detected.ramGB, cores: detected.cores, recommendLowEnd: detected.lowEnd }
   };
 }
 
@@ -179,8 +210,13 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     settings = loadSettings();
+    detected = await detectHardware();
+    if (settings.general.lowEnd == null) {
+      // First run of this version: pick the right profile for this PC once.
+      if (detected.lowEnd) { applyProfile(true); settings.general.lowEndNotice = true; }
+      else settings.general.lowEnd = false;
+    }
     saveSettings();
-    detected = await detectEncoder();
 
     const obsDir = app.isPackaged
       ? path.join(process.resourcesPath, 'obs')
@@ -206,6 +242,24 @@ if (!app.requestSingleInstanceLock()) {
       saveSettings();
       return publicSettings();
     });
+    ipcMain.handle('lowend:set', (_e, on) => {
+      applyProfile(!!on);
+      saveSettings();
+      return publicSettings();
+    });
+    ipcMain.handle('engine:log', () => {
+      const dir = path.join(app.getPath('userData'), 'engine-config', 'obs-studio', 'logs');
+      try {
+        const files = fs.readdirSync(dir).filter((f) => f.endsWith('.txt'))
+          .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((x, y) => y.t - x.t);
+        if (!files.length) return 'No engine log yet.';
+        const lines = fs.readFileSync(path.join(dir, files[0].f), 'utf8').split(/\r?\n/);
+        return lines.slice(-250).join('\n');
+      } catch {
+        return 'No engine log yet. The engine may not have started at all; check that antivirus is not blocking Tonix-Lab-LIVE.';
+      }
+    });
+    ipcMain.handle('engine:openLogs', () => shell.openPath(path.join(app.getPath('userData'), 'engine-config', 'obs-studio', 'logs')));
     ipcMain.handle('hotkeys:save', (_e, map) => {
       settings.hotkeys = {};
       for (const [k, v] of Object.entries(map || {})) if (typeof v === 'string' && v) settings.hotkeys[String(k)] = v;

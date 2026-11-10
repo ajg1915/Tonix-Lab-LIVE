@@ -25,6 +25,10 @@ The first launch builds a starter show: Starting Soon, Gameplay, Screen, Camera 
 
 ## Light on your PC
 
+- **Low-end PC mode** turns on by itself on laptops and PCs with only built-in Intel/AMD graphics, 8 GB RAM or less, or 4 CPU threads or fewer: 720x1280 at 30 fps, fastest encoder preset, automatic bitrate, game capture limited to the stream frame rate, and a lighter preview. Toggle it in Settings › General.
+- The preview pictures are sized to the screen and slow themselves down when the engine is busy, so the game and stream come first.
+- If the engine is slow to start, the app waits up to three minutes and offers **Show engine log**.
+
 - The video is encoded on your graphics chip (NVIDIA NVENC, AMD AMF or Intel Quick Sync), picked automatically. CPU encoding is a fallback.
 - Game capture hooks into the game directly instead of recording the whole screen.
 - **Performance mode** slows the preview pictures in the app. **Settings → Stream quality → Performance** streams 720p30 for slower PCs and graphics cards.

@@ -145,7 +145,11 @@ class Engine {
         VBitrate: String(o.bitrate || 4500),
         ABitrate: String(o.audioBitrate || 160),
         UseAdvanced: 'false',
-        Preset: 'veryfast',
+        // Fastest encoder presets on slower PCs so the game keeps its frames.
+        Preset: opts.lowEnd ? 'ultrafast' : 'veryfast',
+        NVENCPreset2: opts.lowEnd ? 'p1' : 'p5',
+        QSVPreset: opts.lowEnd ? 'speed' : 'balanced',
+        AMDPreset: opts.lowEnd ? 'speed' : 'balanced',
         FilePath: o.recPath || '',
         RecQuality: o.recQuality || 'Stream',
         RecFormat2: o.recFormat || 'fragmented_mp4',

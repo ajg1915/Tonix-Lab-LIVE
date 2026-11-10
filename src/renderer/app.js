@@ -182,15 +182,33 @@
     $('overlayMsg').textContent = msg;
     $('overlayRetry').classList.toggle('hidden', !retry);
   }
-  const hideOverlay = () => $('overlay').classList.add('hidden');
+  const hideOverlay = () => { $('overlay').classList.add('hidden'); $('overlayLog').classList.add('hidden'); };
+  $('overlayLog').addEventListener('click', async () => {
+    const text = await window.tonix.engineLog();
+    const box = el('textarea', { readonly: true, spellcheck: 'false', class: 'log-box' });
+    box.value = text;
+    $('overlay').classList.add('hidden');
+    openModal('Engine log', [el('p', { class: 'muted small', text: 'Copy this and send it over if the engine will not start or keeps lagging.' }), box], [
+      { label: 'Copy', run: async () => { try { await navigator.clipboard.writeText(text); } catch { box.select(); document.execCommand('copy'); } return true; } },
+      { label: 'Open logs folder', run: async () => { await window.tonix.openLogs(); return true; } },
+      { label: 'Close', kind: 'primary', run: () => { if (!state.connected) $('overlay').classList.remove('hidden'); } }
+    ]);
+  });
 
   let connecting = false;
   async function connectLoop() {
     if (connecting) return;
     connecting = true;
     state.info = await window.tonix.engineInfo();
-    for (let i = 0; i < 90 && !state.connected; i++) {
+    const started = Date.now();
+    // Slower laptops can take a minute or more to start the engine the first time.
+    for (let i = 0; i < 180 && !state.connected; i++) {
       if (state.info.status === 'error') break;
+      const secs = Math.round((Date.now() - started) / 1000);
+      if (secs >= 15) {
+        overlay(`Starting the engine… ${secs} s. Slower PCs can take a minute or two the first time, while Windows checks the new files.`);
+        $('overlayLog').classList.toggle('hidden', secs < 30);
+      }
       try {
         await obs.connect(`ws://127.0.0.1:${state.info.port}`, state.info.password, {
           eventSubscriptions: ES.All | ES.InputVolumeMeters | ES.SceneItemTransformChanged
@@ -206,8 +224,10 @@
       try { await init(); hideOverlay(); } catch (e) { overlay('Could not set up the studio: ' + errText(e), true); }
     } else if (state.info.status === 'error') {
       overlay(state.info.statusDetail || 'The engine could not start.', true);
+      $('overlayLog').classList.remove('hidden');
     } else {
-      overlay('The engine did not respond. Make sure nothing is blocking Tonix-Lab-LIVE, then try again.', true);
+      overlay('The engine did not respond. Make sure antivirus is not blocking Tonix-Lab-LIVE, then try again. "Show engine log" tells us why.', true);
+      $('overlayLog').classList.remove('hidden');
     }
   }
 
@@ -228,6 +248,17 @@
   });
 
   // ---------- setup ----------
+  // On slower PCs game capture is limited to the stream's frame rate, which saves a lot of graphics work.
+  function gameSettings() {
+    return { capture_mode: 'any_fullscreen', limit_framerate: lowMode() };
+  }
+  async function syncGameCaptures() {
+    try {
+      const { inputs } = await call('GetInputList', { inputKind: 'game_capture' });
+      for (const i of inputs) await call('SetInputSettings', { inputName: i.inputName, inputSettings: { limit_framerate: lowMode() } }).catch(() => {});
+    } catch { /* ignore */ }
+  }
+
   function pickKind(prefix) {
     return state.kinds.find((k) => k === prefix) || state.kinds.find((k) => k.startsWith(prefix)) || null;
   }
@@ -254,6 +285,13 @@
     $('statEnc').textContent = state.info.encoderLabel;
     applyLook();
     renderTemplates();
+    syncGameCaptures();
+    if (state.settings.general.lowEndNotice) {
+      const hw = state.info.hw || {};
+      $('healthBar').textContent = `Low-end PC mode is on for this computer (${hw.gpu || 'built-in graphics'}, ${hw.ramGB || '?'} GB RAM): 720x1280 at 30 fps for smooth gameplay. Change it in Settings › General.`;
+      $('healthBar').classList.remove('hidden');
+      saveSection('general', { lowEndNotice: false });
+    }
     applyStudioLayout();
     await refreshScenes();
     await refreshTransitions();
@@ -323,7 +361,7 @@
     await step(() => titleScene('Starting Soon', 'Starting Soon Background', 'Starting Soon Title', 'STARTING SOON'));
     await step(async () => {
       await call('CreateScene', { sceneName: 'Gameplay' });
-      await fitItem('Gameplay', await addInput('Gameplay', 'Game Capture', 'game_capture', { capture_mode: 'any_fullscreen' }), 'outer');
+      await fitItem('Gameplay', await addInput('Gameplay', 'Game Capture', 'game_capture', gameSettings()), 'outer');
     });
     await step(async () => {
       await call('CreateScene', { sceneName: 'Camera' });
@@ -757,7 +795,7 @@
     { label: 'Image Slide Show', hint: 'Rotating pictures', kindPrefix: 'slideshow', base: 'Image Slide Show', settings: () => ({ slide_time: 5000, loop: true, transition: 'fade' }) },
     { label: 'Text', hint: 'Titles and labels', kindPrefix: 'text_gdiplus', base: 'Text', settings: () => ({ text: 'New text', font: { face: 'Arial', size: 96, style: 'Bold', flags: 1 } }), center: true },
     { label: 'Color Source', hint: 'Solid color background', kindPrefix: 'color_source', base: 'Color', settings: () => ({ color: 0xFF1E1A17, width: state.base.w, height: state.base.h }) },
-    { label: 'Game Capture', hint: 'Hooks into the game for smooth capture', kind: 'game_capture', base: 'Game Capture', settings: () => ({ capture_mode: 'any_fullscreen' }), fit: 'outer' },
+    { label: 'Game Capture', hint: 'Hooks into the game for smooth capture', kind: 'game_capture', base: 'Game Capture', settings: () => gameSettings(), fit: 'outer' },
     { label: 'Display Capture', hint: 'A whole monitor', kind: 'monitor_capture', base: 'Display Capture', fit: true },
     { label: 'Window Capture', hint: 'One app window', kind: 'window_capture', base: 'Window Capture', fit: true },
     { label: 'Video Capture Device', hint: 'Webcam or HDMI capture card', kind: 'dshow_input', base: 'Video Capture Device', auto: 'video_device_id', fit: 'outer' },
@@ -1246,7 +1284,7 @@
     if (role === 'game') {
       const ex = reuse((k) => k === 'game_capture');
       if (ex) return call('CreateSceneItem', { sceneName: scene, sourceName: ex.inputName });
-      return call('CreateInput', { sceneName: scene, inputName: await uniqueName('Game Capture'), inputKind: 'game_capture', inputSettings: { capture_mode: 'any_fullscreen' } });
+      return call('CreateInput', { sceneName: scene, inputName: await uniqueName('Game Capture'), inputKind: 'game_capture', inputSettings: gameSettings() });
     }
     if (role === 'cam' || role === 'cam2') {
       const ex = reuse((k) => k === 'dshow_input');
@@ -1408,10 +1446,14 @@
     const cSnap = cb('Enable snapping', g.snapping);
     const cSafe = cb('Show phone safe zones', g.safeZones);
     const cPerf = cb('Performance Mode (slower preview pictures, lighter on the PC)', g.perf);
+    const hw = info.hw || {};
+    const cLow = cb('Low-end PC mode (720x1280, 30 fps, fastest encoder, lighter preview)', !!g.lowEnd);
     pages.General = [
       grp('General', row('Language', sel([['en', 'English']], 'en')), row('Theme', theme)),
       grp('Output', cStart.node, cStop.node, cAuto.node),
-      grp('Preview', cSnap.node, cSafe.node, cPerf.node)
+      grp('Performance', cLow.node,
+        el('p', { class: 'muted small', text: `This PC: ${hw.gpu || 'unknown graphics'}, ${hw.ramGB || '?'} GB RAM, ${hw.cores || '?'} CPU threads. ${hw.recommendLowEnd ? 'Low-end mode is recommended here.' : 'This PC can usually run the full 1080x1920 canvas.'}` }), cPerf.node),
+      grp('Preview', cSnap.node, cSafe.node)
     ];
     collect.push(() => ({ general: { theme: theme.value, confirmStart: cStart.input.checked, confirmStop: cStop.input.checked, autoRecord: cAuto.input.checked, snapping: cSnap.input.checked, safeZones: cSafe.input.checked, perf: cPerf.input.checked } }));
 
@@ -1557,13 +1599,19 @@
       const engineKeys = ['video', 'output', 'audio', 'advanced'];
       const engineChanged = engineKeys.some((k) => JSON.stringify(Object.assign({}, s[k], patch[k])) !== JSON.stringify(s[k]));
       state.settings = await window.tonix.saveSettings(patch);
+      let lowChanged = false;
+      if (cLow.input.checked !== !!s.general.lowEnd) {
+        state.settings = await window.tonix.setLowEnd(cLow.input.checked);
+        lowChanged = true;
+      }
       const failed = await window.tonix.saveHotkeys(hk);
       for (const f of devChanges) await f();
       setPerf(!!state.settings.general.perf, false);
       applyLook();
       renderDest();
       if (failed && failed.length) notice('Some hotkeys are taken', 'These keys are already used by another app: ' + failed.join(', '));
-      if (engineChanged) {
+      syncGameCaptures();
+      if (engineChanged || lowChanged) {
         if (state.live || state.rec) notice('Settings saved', 'Video and output changes apply after you stop streaming and recording.');
         else await restartEngine('Applying settings…');
       }
@@ -1624,22 +1672,38 @@
     statsLoop();
   }
 
+  const lowMode = () => !!(state.perf || (state.settings && state.settings.general.lowEnd));
+
   async function shot(sceneName, width) {
-    const r = await call('GetSourceScreenshot', { sourceName: sceneName, imageFormat: 'jpg', imageWidth: width, imageCompressionQuality: 70 });
+    const r = await call('GetSourceScreenshot', { sourceName: sceneName, imageFormat: 'jpg', imageWidth: width, imageCompressionQuality: lowMode() ? 55 : 70 });
     return r.imageData;
   }
 
+  // Ask for preview pictures only as big as they appear on screen.
+  function shotWidth(canvas, low) {
+    const w = canvas.getBoundingClientRect().width * Math.min(window.devicePixelRatio || 1, low ? 1 : 1.5);
+    return Math.max(160, Math.min(state.base.w, Math.round(w / 8) * 8));
+  }
+
+  // The preview slows itself down when the engine is busy, so the game and stream come first.
+  let shotCost = 0;
   async function previewLoop() {
+    let wait = 250;
     if (state.connected && !document.hidden) {
+      const low = lowMode();
       try {
-        const w = state.perf ? 640 : 1280;
+        const t0 = performance.now();
         const scene = editScene();
-        if (scene) $('editImg').src = await shot(scene, w);
-        if (state.studio && state.pgm && (!state.perf || state.tick % 2 === 0)) $('pgmImg').src = await shot(state.pgm, state.perf ? 480 : 960);
+        if (scene) $('editImg').src = await shot(scene, shotWidth($('editCanvas'), low));
+        if (state.studio && state.pgm && state.tick % 2 === 0) $('pgmImg').src = await shot(state.pgm, shotWidth($('pgmCanvas'), true));
+        const cost = performance.now() - t0;
+        shotCost = shotCost ? shotCost * 0.8 + cost * 0.2 : cost;
       } catch { /* scene may be mid-change */ }
       state.tick++;
+      const floor = state.drag ? 66 : (low && (state.live || state.rec)) ? 1000 : low ? 333 : 125;
+      wait = Math.min(2000, Math.max(floor, shotCost * 8));
     }
-    setTimeout(previewLoop, state.perf ? 400 : (state.drag ? 60 : 100));
+    setTimeout(previewLoop, wait);
   }
 
   function mark(id, level) {
@@ -1661,7 +1725,9 @@
         $('statLag').textContent = lag;
         mark('stLag', newLag > 10 ? 2 : newLag > 0 ? 1 : 0);
         let health = '';
-        if (newLag > 10) health = 'Your PC is struggling to keep up. Turn on Performance Mode or pick Performance quality in Settings › Output.';
+        if (newLag > 10) health = state.settings.general.lowEnd
+          ? 'Your PC is struggling. Close other apps, cap your game at 30–60 fps, or lower Settings › Video to 30 fps.'
+          : 'Your PC is struggling to keep up. Turn on Low-end PC mode in Settings › General.';
         if (state.live) {
           const st = await call('GetStreamStatus');
           $('liveStatus').textContent = '● LIVE: ' + (st.outputTimecode || '00:00:00').slice(0, 8);
