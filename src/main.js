@@ -1,8 +1,8 @@
-const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { Engine, QUALITY, ENCODERS } = require('./obs-engine');
+const { Engine, ENCODERS } = require('./obs-engine');
 
 const ENGINE_PORT = 4466; // not 4455, so a normal OBS install never clashes
 
@@ -13,25 +13,40 @@ let detected = { encoder: 'x264', gpu: 'No supported graphics chip found' };
 let isLive = false;
 let quitting = false;
 
-const DEFAULTS = {
-  quality: 'balanced',
-  encoder: 'auto',
-  bitrate: 0,
-  perf: false,
-  destination: { platform: 'youtube', server: 'rtmp://a.rtmp.youtube.com/live2' },
-  keyEnc: null,
-  keyPlain: false,
-  enginePassword: null
-};
+// Phone (9:16) is the default canvas.
+function defaults() {
+  return {
+    general: { confirmStart: true, confirmStop: true, autoRecord: false, snapping: true, safeZones: true, theme: 'dark', perf: false },
+    video: { baseW: 1080, baseH: 1920, outW: 1080, outH: 1920, fps: 30, filter: 'bicubic' },
+    output: { encoder: 'auto', bitrate: 4500, audioBitrate: 160, recPath: app.getPath('videos'), recQuality: 'Stream', recFormat: 'fragmented_mp4' },
+    audio: { sampleRate: 48000, channels: 'Stereo' },
+    advanced: { priority: 'AboveNormal', colorSpace: '709', colorRange: 'Partial', dynamicBitrate: false, netOptimize: false },
+    access: { selColor: '#e5383b', hoverColor: '#ffffff' },
+    hotkeys: {},
+    destination: { platform: 'tiktok', server: '' },
+    keyEnc: null,
+    keyPlain: false,
+    enginePassword: null,
+    v: 2
+  };
+}
+const SECTIONS = ['general', 'video', 'output', 'audio', 'advanced', 'access'];
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 
 function loadSettings() {
   let s = {};
   try { s = JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch { s = {}; }
-  s = Object.assign({}, DEFAULTS, s);
-  if (!s.enginePassword) s.enginePassword = crypto.randomBytes(18).toString('base64url');
-  return s;
+  const d = defaults();
+  const out = Object.assign({}, d);
+  for (const k of SECTIONS) out[k] = Object.assign({}, d[k], s[k] || {});
+  out.hotkeys = s.hotkeys || {};
+  if (s.destination) out.destination = s.destination;
+  out.keyEnc = s.keyEnc || null;
+  out.keyPlain = !!s.keyPlain;
+  out.enginePassword = s.enginePassword || crypto.randomBytes(18).toString('base64url');
+  if (s.perf != null && !s.general) out.general.perf = !!s.perf; // from the first version
+  return out;
 }
 
 function saveSettings() {
@@ -41,7 +56,7 @@ function saveSettings() {
 
 function publicSettings() {
   const { keyEnc, keyPlain, enginePassword, ...rest } = settings;
-  return Object.assign(rest, { hasKey: !!keyEnc });
+  return JSON.parse(JSON.stringify(Object.assign(rest, { hasKey: !!keyEnc })));
 }
 
 function encryptKey(key) {
@@ -76,35 +91,53 @@ async function detectEncoder() {
   return { encoder: 'x264', gpu: 'No supported graphics chip found' };
 }
 
+const activeEncoder = () => (settings.output.encoder === 'auto' ? detected.encoder : settings.output.encoder);
+
 function engineOpts() {
-  const encoder = settings.encoder === 'auto' ? detected.encoder : settings.encoder;
-  return { quality: settings.quality, encoder, bitrate: settings.bitrate };
+  return { video: settings.video, output: settings.output, audio: settings.audio, advanced: settings.advanced, encoder: activeEncoder() };
 }
 
 function engineInfo() {
-  const opts = engineOpts();
+  const enc = activeEncoder();
   return {
     port: ENGINE_PORT,
     password: settings.enginePassword,
     status: engine ? engine.status : 'stopped',
     statusDetail: engine ? engine.detail : '',
-    encoder: opts.encoder,
-    encoderLabel: ENCODERS[opts.encoder],
+    encoder: enc,
+    encoderLabel: ENCODERS[enc],
     detectedEncoder: detected.encoder,
     detectedGpu: detected.gpu,
-    qualityLabel: (QUALITY[settings.quality] || QUALITY.balanced).label,
-    qualities: Object.fromEntries(Object.entries(QUALITY).map(([k, v]) => [k, v.label])),
-    encoders: ENCODERS
+    encoders: ENCODERS,
+    videoLabel: `${settings.video.outW}x${settings.video.outH} · ${settings.video.fps} fps`
   };
+}
+
+// ---- global hotkeys (work while a game has focus) ----
+function registerHotkeys() {
+  globalShortcut.unregisterAll();
+  const failed = [];
+  for (const [action, accel] of Object.entries(settings.hotkeys || {})) {
+    if (!accel) continue;
+    try {
+      const ok = globalShortcut.register(accel, () => {
+        if (win && !win.isDestroyed()) win.webContents.send('hotkey', action);
+      });
+      if (!ok) failed.push(accel);
+    } catch {
+      failed.push(accel);
+    }
+  }
+  return failed;
 }
 
 function createWindow() {
   win = new BrowserWindow({
     width: 1440,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 680,
-    backgroundColor: '#0B0E12',
+    height: 940,
+    minWidth: 1100,
+    minHeight: 720,
+    backgroundColor: '#17181e',
     autoHideMenuBar: true,
     title: 'Tonix-Lab-LIVE',
     webPreferences: {
@@ -123,7 +156,7 @@ function createWindow() {
     if (quitting || !isLive) return;
     const choice = dialog.showMessageBoxSync(win, {
       type: 'warning',
-      buttons: ['Keep streaming', 'End stream and quit'],
+      buttons: ['Keep streaming', 'Stop stream and quit'],
       defaultId: 0,
       cancelId: 0,
       title: 'You are live',
@@ -167,10 +200,17 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.handle('settings:get', () => publicSettings());
     ipcMain.handle('settings:save', (_e, patch) => {
-      const allowed = ['quality', 'encoder', 'bitrate', 'perf'];
-      for (const k of allowed) if (patch && k in patch) settings[k] = patch[k];
+      for (const k of SECTIONS) {
+        if (patch && patch[k] && typeof patch[k] === 'object') settings[k] = Object.assign({}, settings[k], patch[k]);
+      }
       saveSettings();
       return publicSettings();
+    });
+    ipcMain.handle('hotkeys:save', (_e, map) => {
+      settings.hotkeys = {};
+      for (const [k, v] of Object.entries(map || {})) if (typeof v === 'string' && v) settings.hotkeys[String(k)] = v;
+      saveSettings();
+      return registerHotkeys();
     });
     ipcMain.handle('dest:get', () => Object.assign({}, settings.destination, { key: decryptKey() }));
     ipcMain.handle('dest:save', (_e, d) => {
@@ -179,15 +219,21 @@ if (!app.requestSingleInstanceLock()) {
       saveSettings();
       return publicSettings();
     });
+    ipcMain.handle('dialog:folder', async (_e, current) => {
+      const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], defaultPath: current || app.getPath('videos') });
+      return r.canceled ? null : r.filePaths[0];
+    });
     ipcMain.on('state:live', (_e, live) => { isLive = !!live; });
 
     createWindow();
+    registerHotkeys();
     engine.start(engineOpts());
   });
 
   app.on('before-quit', async (e) => {
     if (quitting) return;
     quitting = true;
+    globalShortcut.unregisterAll();
     if (engine && engine.proc) {
       e.preventDefault();
       await engine.stop();

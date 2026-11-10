@@ -8,14 +8,6 @@ const path = require('path');
 const PROFILE = 'TonixLabLive';
 const COLLECTION = 'TonixLabLive';
 
-// Output size, frame rate and default bitrate for each quality preset.
-// The canvas is always 1920x1080 so scenes look the same at every preset.
-const QUALITY = {
-  performance: { label: 'Performance · 720p30', w: 1280, h: 720, fps: 30, bitrate: 3000 },
-  balanced: { label: 'Balanced · 720p60', w: 1280, h: 720, fps: 60, bitrate: 4500 },
-  high: { label: 'High · 1080p60', w: 1920, h: 1080, fps: 60, bitrate: 6000 }
-};
-
 const ENCODERS = {
   nvenc: 'NVIDIA NVENC',
   amd: 'AMD AMF',
@@ -98,16 +90,18 @@ class Engine {
     return this.configRoot;
   }
 
-  writeConfig({ quality, encoder, bitrate }) {
+  // opts = { video, output, audio, advanced, encoder } from the app's settings.
+  writeConfig(opts) {
     const root = path.join(this.linkConfigDir(), 'obs-studio');
-    const q = QUALITY[quality] || QUALITY.balanced;
+    const v = opts.video, o = opts.output, a = opts.audio, adv = opts.advanced;
     const appIni = {
       General: {
         FirstRun: 'true',
         EnableAutoUpdates: 'false',
-        ProcessPriority: 'AboveNormal',
+        ProcessPriority: adv.priority || 'AboveNormal',
         WarnBeforeStartingStream: 'false',
-        WarnBeforeStoppingStream: 'false'
+        WarnBeforeStoppingStream: 'false',
+        RecordWhenStreaming: 'false'
       },
       BasicWindow: {
         SysTrayEnabled: 'true',
@@ -126,28 +120,38 @@ class Engine {
     writeIni(path.join(root, 'global.ini'), appIni);
     writeIni(path.join(root, 'user.ini'), appIni);
 
-    const enc = ENCODERS[encoder] ? encoder : 'x264';
+    const enc = ENCODERS[opts.encoder] ? opts.encoder : 'x264';
     writeIni(path.join(root, 'basic', 'profiles', PROFILE, 'basic.ini'), {
       General: { Name: PROFILE },
       Video: {
-        BaseCX: '1920',
-        BaseCY: '1080',
-        OutputCX: String(q.w),
-        OutputCY: String(q.h),
+        BaseCX: String(v.baseW),
+        BaseCY: String(v.baseH),
+        OutputCX: String(v.outW),
+        OutputCY: String(v.outH),
         FPSType: '0',
-        FPSCommon: String(q.fps),
-        ScaleType: quality === 'performance' ? 'bilinear' : 'bicubic',
-        ColorFormat: 'NV12'
+        FPSCommon: String(v.fps),
+        ScaleType: v.filter || 'bicubic',
+        ColorFormat: 'NV12',
+        ColorSpace: adv.colorSpace || '709',
+        ColorRange: adv.colorRange || 'Partial'
       },
-      Output: { Mode: 'Simple' },
+      Output: {
+        Mode: 'Simple',
+        DynamicBitrate: adv.dynamicBitrate ? 'true' : 'false',
+        NewSocketLoopEnable: adv.netOptimize ? 'true' : 'false'
+      },
       SimpleOutput: {
         StreamEncoder: enc,
-        VBitrate: String(bitrate || q.bitrate),
-        ABitrate: '160',
+        VBitrate: String(o.bitrate || 4500),
+        ABitrate: String(o.audioBitrate || 160),
         UseAdvanced: 'false',
-        Preset: quality === 'performance' ? 'superfast' : 'veryfast'
+        Preset: 'veryfast',
+        FilePath: o.recPath || '',
+        RecQuality: o.recQuality || 'Stream',
+        RecFormat2: o.recFormat || 'fragmented_mp4',
+        RecFormat: o.recFormat === 'mkv' ? 'mkv' : 'mp4'
       },
-      Audio: { SampleRate: '48000', ChannelSetup: 'Stereo' }
+      Audio: { SampleRate: String(a.sampleRate || 48000), ChannelSetup: a.channels || 'Stereo' }
     });
 
     const wsDir = path.join(root, 'plugin_config', 'obs-websocket');
@@ -223,4 +227,4 @@ class Engine {
   }
 }
 
-module.exports = { Engine, QUALITY, ENCODERS };
+module.exports = { Engine, ENCODERS };

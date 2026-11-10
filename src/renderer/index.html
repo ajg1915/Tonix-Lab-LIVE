@@ -9,28 +9,72 @@
 <body>
 <div class="app">
 
+  <header class="topbar">
+    <span class="title">Tonix-Lab-LIVE</span>
+    <span class="chip-canvas" id="canvasChip">Canvas</span>
+    <span class="muted small" id="canvasHint"></span>
+    <span class="grow"></span>
+    <button id="safeBtn" class="btn" type="button" aria-pressed="true">Safe zones</button>
+    <button id="settingsTop" class="btn" type="button">Settings</button>
+  </header>
+
   <div id="healthBar" class="health hidden" role="status"></div>
 
-  <section class="stage" id="stage">
-    <div class="view" id="previewView">
-      <div class="view-label" id="previewLabel">Preview</div>
-      <div class="canvas-box" id="editBox">
-        <div class="canvas" id="editCanvas">
-          <img id="editImg" alt="Scene being edited">
-          <div class="sel-layer" id="selLayer"></div>
+  <section class="stage">
+    <aside class="side" id="templatePanel">
+      <div class="side-title">Phone layout templates</div>
+      <div id="templates" class="templates"></div>
+      <p class="muted small">Applies to the selected scene. Missing sources (game, camera, title) are added for you. Every source can still be moved and resized.</p>
+    </aside>
+
+    <div class="center">
+      <div class="view" id="previewView">
+        <div class="view-label" id="previewLabel">Preview</div>
+        <div class="canvas-box" id="editBox">
+          <div class="canvas" id="editCanvas">
+            <img id="editImg" alt="Scene being edited">
+            <div class="safe hidden" id="safeLayer" aria-hidden="true">
+              <span class="safe-top">Top bar · app covers this</span>
+              <span class="safe-right">Like · comment · share</span>
+              <span class="safe-bottom">Caption · comments</span>
+            </div>
+            <div class="sel-layer" id="selLayer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="transition-col hidden" id="transCol">
+        <button id="takeBtn" class="btn take" type="button">Transition</button>
+        <button id="cutBtn" class="btn" type="button">Cut</button>
+      </div>
+      <div class="view hidden" id="programView">
+        <div class="view-label pgm">Program</div>
+        <div class="canvas-box">
+          <div class="canvas" id="pgmCanvas"><img id="pgmImg" alt="Program output"></div>
         </div>
       </div>
     </div>
-    <div class="transition-col hidden" id="transCol">
-      <button id="takeBtn" class="btn take" type="button">Transition</button>
-      <button id="cutBtn" class="btn" type="button">Cut</button>
-    </div>
-    <div class="view hidden" id="programView">
-      <div class="view-label pgm">Program</div>
-      <div class="canvas-box">
-        <div class="canvas" id="pgmCanvas"><img id="pgmImg" alt="Program output"></div>
+
+    <aside class="side" id="transformPanel">
+      <div class="side-title">Transform</div>
+      <div id="tfEmpty" class="muted small">Select a source on the canvas or in Sources to move, size and layer it.</div>
+      <div id="tfBody" class="hidden tf">
+        <div class="tf-name" id="tfName"></div>
+        <div class="muted small" id="tfKind"></div>
+        <div class="grid2">
+          <label class="field"><span>X</span><input id="tfX" type="number" step="1"></label>
+          <label class="field"><span>Y</span><input id="tfY" type="number" step="1"></label>
+          <label class="field"><span>Width</span><input id="tfW" type="number" step="1" min="1"></label>
+          <label class="field"><span>Height</span><input id="tfH" type="number" step="1" min="1"></label>
+        </div>
+        <label class="field"><span>Rotation</span><input id="tfR" type="number" step="1"></label>
+        <div class="btn-row">
+          <button id="tfFit" class="btn" type="button">Fit to canvas</button>
+          <button id="tfFill" class="btn" type="button">Fill canvas</button>
+          <button id="tfCenter" class="btn" type="button">Center</button>
+          <button id="tfTop" class="btn" type="button">Bring to front</button>
+        </div>
       </div>
-    </div>
+    </aside>
   </section>
 
   <section class="docks">
@@ -48,7 +92,7 @@
       <div class="dock-title">Sources</div>
       <ul class="list" id="sourceList" role="listbox" aria-label="Sources"></ul>
       <div class="dock-tools">
-        <button class="tool" id="srcAdd" type="button" title="Add source" aria-label="Add source">+</button>
+        <button class="tool add" id="srcAdd" type="button" title="Add source" aria-label="Add source">+</button>
         <button class="tool" id="srcRemove" type="button" title="Remove source" aria-label="Remove source">−</button>
         <button class="tool wide" id="srcProps" type="button">Properties</button>
         <button class="tool" id="srcUp" type="button" title="Move up" aria-label="Move up">▲</button>
@@ -56,7 +100,7 @@
       </div>
     </div>
 
-    <div class="dock mixer-dock">
+    <div class="dock">
       <div class="dock-title">Audio Mixer</div>
       <div class="mixer" id="mixer"><p class="muted pad">Waiting for audio…</p></div>
     </div>
@@ -72,7 +116,8 @@
     <div class="dock">
       <div class="dock-title">Controls</div>
       <div class="dock-body controls">
-        <button id="liveBtn" class="btn ctrl" type="button">Start Streaming</button>
+        <button id="liveBtn" class="btn ctrl stream" type="button">Start Streaming</button>
+        <button id="recBtn" class="btn ctrl" type="button">Start Recording</button>
         <button id="studioBtn" class="btn ctrl" type="button" aria-pressed="false">Studio Mode</button>
         <button id="perfBtn" class="btn ctrl" type="button" aria-pressed="false">Performance Mode</button>
         <button id="settingsBtn" class="btn ctrl" type="button">Settings</button>
@@ -82,7 +127,9 @@
 
   <footer class="status">
     <span id="liveStatus" class="st-live">○ LIVE: 00:00:00</span>
+    <span id="recStatus" class="st-live">○ REC: 00:00:00</span>
     <span class="st-item">Stream: <b id="destLabel">not set</b></span>
+    <span class="st-item">Output: <b id="outLabel">–</b></span>
     <span class="grow"></span>
     <span class="st-item" id="stLag" title="Frames the PC could not draw in time">Lag: <b id="statLag">0</b></span>
     <span class="st-item" id="stDrop">Dropped: <b id="statDrop">0</b></span>
@@ -104,7 +151,7 @@
 </div>
 
 <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-  <div class="modal-box">
+  <div class="modal-box" id="modalBox">
     <h3 id="modalTitle"></h3>
     <div id="modalBody" class="modal-body"></div>
     <div id="modalActions" class="modal-actions"></div>

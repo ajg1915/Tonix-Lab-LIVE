@@ -1,6 +1,6 @@
 # Tonix-Lab-LIVE
 
-A lightweight OBS-style live-streaming studio for Windows: the familiar canvas with Scenes, Sources, Audio Mixer, Scene Transitions and Controls docks, built to stay light on your CPU and graphics card.
+A lightweight OBS-style live-streaming studio for Windows built for phone-screen streams: a vertical 1080×1920 (9:16) canvas for TikTok, YouTube Shorts, Instagram and Facebook Reels, with the familiar Scenes, Sources, Audio Mixer, Scene Transitions and Controls docks and the full OBS Settings window.
 
 ## Install
 
@@ -12,8 +12,13 @@ The first launch builds a starter show: Starting Soon, Gameplay, Screen, Camera 
 
 ## Using the studio
 
+- **Phone layout templates (left):** Starting soon, Game + cam split, Full-screen game, Just chatting, Podcast duo. They arrange the selected scene and add any missing game, camera or title source.
+- **Safe zones:** shade the parts of the phone screen the app covers (top bar, like/comment/share, caption).
+- **Transform panel (right):** exact X, Y, width, height and rotation, plus Fit, Fill (crop), Center and Bring to front.
+- **Settings:** the OBS categories — General, Stream, Output (bitrate, encoder, recording), Audio, Video (canvas 1080x1920 by default), Hotkeys (work while a game has focus), Accessibility and Advanced.
+
 - **Scenes dock:** click a scene to switch to it, + to add, − to remove, double-click to rename.
-- **Sources dock:** + adds a source (Browser/HTML overlay, Image, Text, Color, Game Capture, Display Capture, Window Capture, Video Capture Device for webcams and HDMI capture cards, Media, audio). The eye shows/hides, the lock stops it moving, ▲▼ change the layer order, double-click opens Properties.
+- **Sources dock:** + adds a source (Browser/HTML overlay, Image, Image Slide Show, Scene, Text, Color, Game Capture, Display Capture, Window Capture, Video Capture Device for webcams and HDMI capture cards, Media, audio). The eye shows/hides, the lock stops it moving, ▲▼ change the layer order, double-click opens Properties.
 - **Canvas:** click a source to select it, drag to move, pull the red handles to resize (Shift = free resize, Alt = no snapping). Arrow keys nudge, Delete removes. Right-click for Fit/Stretch/Center/Reset transform and layer order.
 - **Studio Mode:** edit the Preview while Program stays live, then press Transition or Cut.
 - **Start Streaming:** set your service and stream key in Settings › Stream first.
