@@ -1,0 +1,49 @@
+{
+  "name": "tonix-lab-live",
+  "productName": "Tonix-Lab-LIVE",
+  "version": "0.1.0",
+  "description": "Lightweight control-room live streaming studio for Windows",
+  "main": "src/main.js",
+  "author": "Anthony Gennaro",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.2.5",
+    "@fontsource/barlow-condensed": "^5.2.5",
+    "@fontsource/jetbrains-mono": "^5.2.5"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.tonixlab.live",
+    "productName": "Tonix-Lab-LIVE",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "node_modules/@fontsource/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "obs",
+        "to": "obs"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Tonix-Lab-LIVE",
+      "artifactName": "Tonix-Lab-LIVE-Setup-${version}.${ext}"
+    }
+  }
+}
